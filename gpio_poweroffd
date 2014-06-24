@@ -1,0 +1,47 @@
+#! /bin/sh
+### BEGIN INIT INFO
+# Provides:             gpio_poweroffd
+# Required-Start:       $remote_fs $syslog $time
+# Required-Stop:        $remote_fs $syslog
+# Default-Start:        2 3 4 5
+# Default-Stop:
+# Short-Description:    Start a daemon to read a GPIO pin for a poweroff switch
+### END INIT INFO
+
+set -e
+
+DAEMON="/usr/local/bin/gpio_poweroffd.py"
+
+# Check for daemon presence
+[ -x "$DAEMON" ] || exit 0
+
+# Get lsb functions
+. /lib/lsb/init-functions
+
+case "$1" in
+    start)
+        log_begin_msg "Starting gpio_poweroffd..."
+        start-stop-daemon --start --quiet --oknodo --exec "$DAEMON"
+        log_end_msg $?
+        ;;
+    stop)
+        log_begin_msg "Stopping gpio_poweroffd..."
+        start-stop-daemon --stop --quiet --oknodo --exec "$DAEMON"
+        log_end_msg $?
+        ;;
+    restart)
+        $0 stop
+        sleep 1
+        $0 start
+        ;;
+    reload|force-reload)
+        log_success_msg "Reloading gpio_poweroffd (nothing to do)..."
+        ;;
+    status)
+        status_of_proc "$DAEMON" gpio_poweroffd
+        ;;
+    *)
+        log_success_msg "Usage: /etc/init.d/gpio_poweroffd {start|stop|restart|reload|force-reload|status}"
+        exit 1
+        ;;
+esac
