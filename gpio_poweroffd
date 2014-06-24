@@ -1,47 +1,75 @@
-#!/bin/sh
-### BEGIN INIT INFO
-# Provides:             gpio_poweroffd
-# Required-Start:       $remote_fs $syslog $time
-# Required-Stop:        $remote_fs $syslog
-# Default-Start:        2 3 4 5
-# Default-Stop:
-# Short-Description:    Start a daemon to read a GPIO pin for a poweroff switch
-### END INIT INFO
+#!/usr/bin/env python2
 
-set -e
+# Copyright (C) 2014  Jim Turner
 
-DAEMON="/usr/local/bin/gpio_poweroffd.py"
+# This file is part of raspbian_gpio_poweroffd.
 
-# Check for daemon presence
-[ -x "$DAEMON" ] || exit 0
+# raspbian_gpio_poweroffd is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by the Free
+# Software Foundation, either version 2 of the License, or (at your option) any
+# later version.
 
-# Get lsb functions
-. /lib/lsb/init-functions
+# This program is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+# PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 
-case "$1" in
-    start)
-        log_begin_msg "Starting gpio_poweroffd..."
-        start-stop-daemon --start --quiet --oknodo --exec "$DAEMON"
-        log_end_msg $?
-        ;;
-    stop)
-        log_begin_msg "Stopping gpio_poweroffd..."
-        start-stop-daemon --stop --quiet --oknodo --exec "$DAEMON"
-        log_end_msg $?
-        ;;
-    restart)
-        $0 stop
-        sleep 1
-        $0 start
-        ;;
-    reload|force-reload)
-        log_success_msg "Reloading gpio_poweroffd (nothing to do)..."
-        ;;
-    status)
-        status_of_proc "$DAEMON" gpio_poweroffd
-        ;;
-    *)
-        log_success_msg "Usage: /etc/init.d/gpio_poweroffd {start|stop|restart|reload|force-reload|status}"
-        exit 1
-        ;;
-esac
+# You should have received a copy of the GNU General Public License along with
+# this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import logging
+import logging.handlers
+import RPi.GPIO as GPIO
+import subprocess
+import time
+
+
+console_format = '%(name)-13s %(levelname)-8s %(message)s'
+syslog_format = 'thinkpad-scripts: %(name)s %(levelname)s %(message)s'
+
+
+def setup_GPIO(channel):
+    """Setup GPIO to read from specified channel.
+
+    :param channel: GPIO channel number (board notation)
+    """
+    GPIO.setmode(GPIO.BOARD)
+    GPIO.setwarnings(False)
+    GPIO.setup(channel, GPIO.IN)
+
+
+def setup_logging():
+    """Setup logging to use system logger.
+
+    :return: this module's Logger instance
+    """
+    logging.basicConfig(level=logging.INFO, format=console_format)
+    syslog = logging.handlers.SysLogHandler(address='/dev/log')
+    syslog.setLevel(logging.DEBUG)
+    syslog.setFormatter(logging.Formatter(syslog_format))
+    logging.getLogger().addHandler(syslog)
+    return logging.getLogger(__name__)
+
+
+def main(channel, hold_time):
+    """Listen for `channel` to go to False. If it remains False for at
+    least `hold_time`, then run ``poweroff``.
+
+    :param channel: GPIO channel number (board notation)
+    :param hold_time: hold time in seconds
+    """
+    setup_GPIO(channel)
+    logger = setup_logging()
+    while True:
+        GPIO.wait_for_edge(channel, GPIO.FALLING)
+        press = time.time()
+        while (time.time() - press) < hold_time:
+            time.sleep(0.05)
+            if GPIO.input(channel):
+                break
+        else:
+            logger.info('Calling poweroff.')
+            subprocess.Popen(['poweroff'])
+
+
+if __name__ == '__main__':
+    main(3, 5)
