@@ -28,13 +28,13 @@ def setup_logging():
     return logging.getLogger(__name__)
 
 
-def main(channel):
+def main(channel, hold_time):
     setup_GPIO(channel)
     logger = setup_logging()
     while True:
         GPIO.wait_for_edge(channel, GPIO.FALLING)
         press = time.time()
-        while (time.time() - press) < 5:
+        while (time.time() - press) < hold_time:
             time.sleep(0.05)
             if GPIO.input(channel):
                 break
@@ -44,4 +44,4 @@ def main(channel):
 
 
 if __name__ == '__main__':
-    main(3)
+    main(3, 5)
