@@ -61,10 +61,13 @@ def main(channel, hold_time):
     logger = setup_logging()
     while True:
         GPIO.wait_for_edge(channel, GPIO.FALLING)
+        logging.debug('Caught button press.')
         press = time.time()
         while (time.time() - press) < hold_time:
             time.sleep(0.05)
             if GPIO.input(channel):
+                logging.debug('Button released before {} seconds '
+                              'elapsed.'.format(hold_time))
                 break
         else:
             logger.info('Calling poweroff.')
