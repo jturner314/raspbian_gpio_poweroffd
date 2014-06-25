@@ -16,105 +16,212 @@
 # You should have received a copy of the GNU General Public License along with
 # this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
+
+import atexit
 import logging
 import logging.handlers
 import os
 import RPi.GPIO as GPIO
+import signal
 import subprocess
 import sys
 import time
 
 
-console_format = '%(name)-13s %(levelname)-8s %(message)s'
-syslog_format = 'thinkpad-scripts: %(name)s %(levelname)s %(message)s'
-
-
-def daemonize():
+class Daemon:
     """
-    Daemonize process, from http://www.jejik.com/articles/2007/02/a_simple_unix_linux_daemon_in_python/
+    A generic daemon class from
+    http://www.jejik.com/articles/2007/02/a_simple_unix_linux_daemon_in_python/
+
+    Usage: subclass the Daemon class and override the run() method
     """
-    try:
-        pid = os.fork()
-        if pid > 0:
-            # exit first parent
-            sys.exit(0)
-    except OSError, e:
-        sys.stderr.write("fork #1 failed: %d (%s)\n" % (e.errno, e.strerror))
-        sys.exit(1)
+    def __init__(self, pidfile, stdin='/dev/null', stdout='/dev/null', stderr='/dev/null'):
+        self.stdin = stdin
+        self.stdout = stdout
+        self.stderr = stderr
+        self.pidfile = pidfile
 
-    # decouple from parent environment
-    os.chdir("/")
-    os.setsid()
-    os.umask(0)
+    def daemonize(self):
+        """
+        do the UNIX double-fork magic, see Stevens' "Advanced
+        Programming in the UNIX Environment" for details (ISBN 0201563177)
+        http://www.erlenstar.demon.co.uk/unix/faq_2.html#SEC16
+        """
+        try:
+            pid = os.fork()
+            if pid > 0:
+                # exit first parent
+                sys.exit(0)
+        except OSError, e:
+            sys.stderr.write("fork #1 failed: {} ({})\n".format(e.errno, e.strerror))
+            sys.exit(1)
 
-    # do second fork
-    try:
-        pid = os.fork()
-        if pid > 0:
-            # exit from second parent
-            sys.exit(0)
-    except OSError, e:
-        sys.stderr.write("fork #2 failed: %d (%s)\n" % (e.errno, e.strerror))
-        sys.exit(1)
+        # decouple from parent environment
+        os.chdir("/")
+        os.setsid()
+        os.umask(0)
 
-    # redirect standard file descriptors
-    sys.stdout.flush()
-    sys.stderr.flush()
-    si = file('/dev/null', 'r')
-    so = file('/dev/null', 'a+')
-    se = file('/dev/null', 'a+', 0)
-    os.dup2(si.fileno(), sys.stdin.fileno())
-    os.dup2(so.fileno(), sys.stdout.fileno())
-    os.dup2(se.fileno(), sys.stderr.fileno())
+        # do second fork
+        try:
+            pid = os.fork()
+            if pid > 0:
+                # exit from second parent
+                sys.exit(0)
+        except OSError, e:
+            sys.stderr.write("fork #2 failed: {} ({})\n".format(e.errno, e.strerror))
+            sys.exit(1)
+
+        # redirect standard file descriptors
+        sys.stdout.flush()
+        sys.stderr.flush()
+        si = file(self.stdin, 'r')
+        so = file(self.stdout, 'a+')
+        se = file(self.stderr, 'a+', 0)
+        os.dup2(si.fileno(), sys.stdin.fileno())
+        os.dup2(so.fileno(), sys.stdout.fileno())
+        os.dup2(se.fileno(), sys.stderr.fileno())
+
+        # write pidfile
+        atexit.register(self.delpid)
+        pid = str(os.getpid())
+        file(self.pidfile,'w+').write("{}\n".format(pid))
+
+    def delpid(self):
+        os.remove(self.pidfile)
+
+    def start(self):
+        """
+        Start the daemon
+        """
+        # Check for a pidfile to see if the daemon already runs
+        try:
+            pf = file(self.pidfile,'r')
+            pid = int(pf.read().strip())
+            pf.close()
+        except IOError:
+            pid = None
+
+        if pid:
+            message = "pidfile {} already exist. Daemon already running?\n"
+            sys.stderr.write(message.format(self.pidfile))
+            sys.exit(1)
+
+        # Start the daemon
+        self.daemonize()
+        self.run()
+
+    def stop(self):
+        """
+        Stop the daemon
+        """
+        # Get the pid from the pidfile
+        try:
+            pf = file(self.pidfile,'r')
+            pid = int(pf.read().strip())
+            pf.close()
+        except IOError:
+            pid = None
+
+        if not pid:
+            message = "pidfile {} does not exist. Daemon not running?\n"
+            sys.stderr.write(message.format(self.pidfile))
+            return # not an error in a restart
+
+        # Try killing the daemon process
+        try:
+            while 1:
+                os.kill(pid, signalSIGTERM)
+                time.sleep(0.1)
+        except OSError, err:
+            err = str(err)
+            if err.find("No such process") > 0:
+                if os.path.exists(self.pidfile):
+                    os.remove(self.pidfile)
+            else:
+                print(str(err))
+                sys.exit(1)
+
+    def restart(self):
+        """
+        Restart the daemon
+        """
+        self.stop()
+        self.start()
+
+    def run(self):
+        """
+        You should override this method when you subclass Daemon. It will be called after the process has been
+        daemonized by start() or restart().
+        """
 
 
-def setup_GPIO(channel):
-    """Setup GPIO to read from specified channel.
+class GpioPoweroffd(Daemon):
 
-    :param channel: GPIO channel number (board notation)
-    """
-    GPIO.setmode(GPIO.BOARD)
-    GPIO.setwarnings(False)
-    GPIO.setup(channel, GPIO.IN)
+    def __init__(self, pidfile, channel=3, hold_time=5, stdin='/dev/null',
+                 stdout='/dev/null', stderr='/dev/null'):
+        self.channel = channel
+        self.hold_time = hold_time
+        self.logger = None
+        Daemon.__init__(self, pidfile, stdin, stdout, stderr)
 
+    def setup_GPIO(self):
+        """Setup GPIO to read from specified channel.
 
-def setup_logging():
-    """Setup logging to use system logger.
+        :param channel: GPIO channel number (board notation)
+        """
+        GPIO.setmode(GPIO.BOARD)
+        GPIO.setwarnings(False)
+        GPIO.setup(self.channel, GPIO.IN)
 
-    :return: this module's Logger instance
-    """
-    logging.basicConfig(level=logging.INFO, format=console_format)
-    syslog = logging.handlers.SysLogHandler(address='/dev/log')
-    syslog.setLevel(logging.DEBUG)
-    syslog.setFormatter(logging.Formatter(syslog_format))
-    logging.getLogger().addHandler(syslog)
-    return logging.getLogger(__name__)
+    def setup_logging(self):
+        """Setup logging to use system logger.
 
+        :return: this module's Logger instance
+        """
+        console_format = '%(name)-13s %(levelname)-8s %(message)s'
+        syslog_format = 'thinkpad-scripts: %(name)s %(levelname)s %(message)s'
+        logging.basicConfig(level=logging.INFO, format=console_format)
+        syslog = logging.handlers.SysLogHandler(address='/dev/log')
+        syslog.setLevel(logging.DEBUG)
+        syslog.setFormatter(logging.Formatter(syslog_format))
+        logging.getLogger().addHandler(syslog)
+        self.logger = logging.getLogger(__name__)
 
-def main(channel, hold_time):
-    """Listen for `channel` to go to False. If it remains False for at
-    least `hold_time`, then run ``poweroff``.
-
-    :param channel: GPIO channel number (board notation)
-    :param hold_time: hold time in seconds
-    """
-    setup_GPIO(channel)
-    logger = setup_logging()
-    while True:
-        GPIO.wait_for_edge(channel, GPIO.FALLING)
-        logging.debug('Caught button press.')
-        press = time.time()
-        while (time.time() - press) < hold_time:
-            time.sleep(0.05)
-            if GPIO.input(channel):
-                logging.debug('Button released before {} seconds '
-                              'elapsed.'.format(hold_time))
-                break
-        else:
-            logger.info('Calling poweroff.')
-            subprocess.Popen(['poweroff'])
+    def run(self)
+        """Listen for `self.channel` to go to False. If it remains False for at
+        least `self.hold_time`, then run ``poweroff``.
+        """
+        self.setup_GPIO()
+        self.setup_logging()
+        while True:
+            GPIO.wait_for_edge(self.channel, GPIO.FALLING)
+            self.logger.debug('Caught button press.')
+            press = time.time()
+            while (time.time() - press) < self.hold_time:
+                time.sleep(0.05)
+                if GPIO.input(self.channel):
+                    self.logger.debug('Button released before {} seconds '
+                                      'elapsed.'.format(self.hold_time))
+                    break
+            else:
+                self.logger.info('Calling poweroff.')
+                subprocess.Popen(['poweroff'])
 
 
 if __name__ == '__main__':
-    daemonize()
-    main(3, 5)
+    daemon = GpioPoweroffd('/var/run/gpio_poweroffd.pid')
+    if len(sys.argv) == 2:
+        if 'start' == sys.argv[1]:
+            daemon.start()
+        elif 'stop' == sys.argv[1]:
+            daemon.stop()
+        elif 'restart' == sys.argv[1]:
+            daemon.restart()
+        else:
+            print("Unknown command")
+            sys.exit(2)
+        sys.exit(0)
+    else:
+        print("usage: {} start|stop|restart".format(sys.argv[0]))
+        sys.exit(2)

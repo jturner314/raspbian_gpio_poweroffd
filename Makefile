@@ -18,7 +18,4 @@
 
 install:
 	install -d "$(DESTDIR)/etc/init.d/"
-	install -m 755 gpio_poweroffd.sh -t "$(DESTDIR)/etc/init.d/"
-#
-	install -d "$(DESTDIR)/usr/sbin/"
-	install -m 755 gpio_poweroffd -t "$(DESTDIR)/usr/sbin/"
+	install -m 755 gpio_poweroffd -t "$(DESTDIR)/etc/init.d/"
