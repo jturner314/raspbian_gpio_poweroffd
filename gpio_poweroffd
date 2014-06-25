@@ -16,6 +16,15 @@
 # You should have received a copy of the GNU General Public License along with
 # this program.  If not, see <http://www.gnu.org/licenses/>.
 
+### BEGIN INIT INFO
+# Provides:          gpio_poweroffd
+# Required-Start:    $remote_fs $syslog $time
+# Required-Stop:     $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Start a daemon to read a GPIO pin for a poweroff switch
+### END INIT INFO
+
 from __future__ import print_function
 
 import atexit
