@@ -23,9 +23,20 @@ shorted to ground.  If the pin is shorted to ground for at least 5
 seconds, then the daemon executes the ``poweroff`` command to safely
 shutdown the Raspberry Pi.
 
+Dependencies
+============
+
+* ``python-rpi.gpio`` package from http://archive.raspberrpi.org
+
+Installation
+============
+
 To install, run::
 
   # make install
+
+Enabling/disabling
+==================
 
 To enable the daemon to start at boot, run::
 
