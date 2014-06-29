@@ -38,18 +38,21 @@ import sys
 import time
 
 
-class Daemon:
+class GpioPoweroffd:
     """
-    A generic daemon class from
+    Based off of
     http://www.jejik.com/articles/2007/02/a_simple_unix_linux_daemon_in_python/
-
-    Usage: subclass the Daemon class and override the run() method
     """
-    def __init__(self, pidfile, stdin='/dev/null', stdout='/dev/null', stderr='/dev/null'):
+
+    def __init__(self, pidfile, channel=5, hold_time=5,
+                 stdin='/dev/null', stdout='/dev/null', stderr='/dev/null'):
+        self.pidfile = pidfile
+        self.channel = channel
+        self.hold_time = hold_time
         self.stdin = stdin
         self.stdout = stdout
         self.stderr = stderr
-        self.pidfile = pidfile
+        self.logger = None
 
     def daemonize(self):
         """
@@ -158,22 +161,6 @@ class Daemon:
         self.stop()
         self.start()
 
-    def run(self):
-        """
-        You should override this method when you subclass Daemon. It will be called after the process has been
-        daemonized by start() or restart().
-        """
-
-
-class GpioPoweroffd(Daemon):
-
-    def __init__(self, pidfile, channel=5, hold_time=5, stdin='/dev/null',
-                 stdout='/dev/null', stderr='/dev/null'):
-        self.channel = channel
-        self.hold_time = hold_time
-        self.logger = None
-        Daemon.__init__(self, pidfile, stdin, stdout, stderr)
-
     def setup_GPIO(self):
         """Setup GPIO to read from specified channel.
 
@@ -197,7 +184,7 @@ class GpioPoweroffd(Daemon):
         logging.getLogger().addHandler(syslog)
         self.logger = logging.getLogger(__name__)
 
-    def run(self)
+    def run(self):
         """Listen for `self.channel` to go to False. If it remains False for at
         least `self.hold_time`, then run ``poweroff``.
         """
