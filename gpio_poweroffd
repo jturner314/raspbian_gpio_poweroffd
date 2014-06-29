@@ -175,8 +175,8 @@ class GpioPoweroffd:
 
         :return: this module's Logger instance
         """
-        console_format = '%(name)-13s %(levelname)-8s %(message)s'
-        syslog_format = 'thinkpad-scripts: %(name)s %(levelname)s %(message)s'
+        console_format = '%(levelname)-8s %(message)s'
+        syslog_format = 'gpio_poweroffd: %(levelname)s %(message)s'
         logging.basicConfig(level=logging.INFO, format=console_format)
         syslog = logging.handlers.SysLogHandler(address='/dev/log',
                                                 facility='daemon')
