@@ -18,12 +18,13 @@
 GPIO Poweroff Daemon for Raspbian
 #################################
 
-**WARNING: This project is not yet in a working state. Do not use.**
-
 This is a daemon for Raspbian Wheezy that listens for GPIO pin 3 to be
 shorted to ground.  If the pin is shorted to ground for at least 5
 seconds, then the daemon executes the ``poweroff`` command to safely
 shutdown the Raspberry Pi.
+
+It still needs a lot of code cleanup, additional logging, etc., but it
+functions correctly.
 
 Dependencies
 ============
