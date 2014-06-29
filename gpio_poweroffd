@@ -193,13 +193,13 @@ class GpioPoweroffd:
         self.setup_logging()
         while True:
             GPIO.wait_for_edge(self.channel, GPIO.FALLING)
-            self.logger.debug('Caught button press.')
+            self.logger.info('Caught button press.')
             press = time.time()
             while (time.time() - press) < self.hold_time:
                 time.sleep(0.05)
                 if GPIO.input(self.channel):
-                    self.logger.debug('Button released before {} seconds '
-                                      'elapsed.'.format(self.hold_time))
+                    self.logger.info('Button released before {} seconds '
+                                     'elapsed.'.format(self.hold_time))
                     break
             else:
                 self.logger.info('Calling poweroff.')
