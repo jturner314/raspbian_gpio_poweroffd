@@ -167,7 +167,7 @@ class Daemon:
 
 class GpioPoweroffd(Daemon):
 
-    def __init__(self, pidfile, channel=3, hold_time=5, stdin='/dev/null',
+    def __init__(self, pidfile, channel=5, hold_time=5, stdin='/dev/null',
                  stdout='/dev/null', stderr='/dev/null'):
         self.channel = channel
         self.hold_time = hold_time
