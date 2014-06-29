@@ -27,11 +27,11 @@
 
 from __future__ import print_function
 
+from RPi import GPIO
 import atexit
 import logging
 import logging.handlers
 import os
-import RPi.GPIO as GPIO
 import signal
 import subprocess
 import sys
