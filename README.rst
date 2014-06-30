@@ -43,8 +43,8 @@ Enabling/disabling
 
 To enable the daemon to start at boot, run::
 
-  # update-rc.d gpio_poweroffd.sh defaults
+  # update-rc.d gpio_poweroffd defaults
 
 To disable starting at boot, run::
 
-  # update-rc.d gpio_poweroffd.sh remove
+  # update-rc.d gpio_poweroffd remove
