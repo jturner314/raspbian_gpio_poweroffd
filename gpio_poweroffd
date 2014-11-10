@@ -204,6 +204,8 @@ class GpioPoweroffd:
             else:
                 self.logger.info('Calling poweroff.')
                 subprocess.Popen(['poweroff'])
+            # Sleep for the rest of self.hold_time to rate limit press attempts
+            sleep(self.hold_time - (time.time() - press))
 
 
 if __name__ == '__main__':
